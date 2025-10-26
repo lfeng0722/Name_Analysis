@@ -21,6 +21,18 @@ def test_docs_available(client: TestClient):
 
 
 @pytest.mark.integration
+def test_metrics_endpoint_exposes_prometheus_text(client: TestClient):
+    """The /metrics endpoint should expose Prometheus text format and include default process metrics."""
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    assert r.headers.get("content-type", "").startswith("text/plain")
+    body = r.text
+    # A couple of common default metrics names from prometheus_client
+    assert "python_info" in body
+    assert "process_cpu_seconds_total" in body or "process_virtual_memory_bytes" in body
+
+
+@pytest.mark.integration
 def test_single_normalise_happy_path(client: TestClient):
     """Single endpoint happy path from the problem statement."""
     r = client.post("/normalise", json={"messy_title": "BILLY THE EXTERMINATOR-DAY (R)"})
