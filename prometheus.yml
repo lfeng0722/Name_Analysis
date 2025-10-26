@@ -1,0 +1,6 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: normaliser
+    static_configs:
+      - targets: ['host.docker.internal:8000']   # Mac/Win；Linux 可用 172.17.0.1 或宿主机 IP
