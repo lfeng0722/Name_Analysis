@@ -1,0 +1,67 @@
+name: CI - Python tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          # optional extras:
+          # pip install ruff mypy coverage
+
+      # --- optional static checks ---
+      # - name: Ruff lint
+      #   run: ruff check .
+
+      # - name: Type check (mypy)
+      #   run: mypy app
+
+      - name: Run unit tests (fast)
+        run: |
+          pytest -m unit -q --maxfail=1 --disable-warnings
+
+      - name: Run integration tests
+        run: |
+          pytest -m integration -q --maxfail=1 --disable-warnings
+
+      - name: Coverage report (aggregate)
+        if: always()
+        run: |
+          pip install coverage
+          coverage run -m pytest -q
+          coverage xml
+          ls -l coverage.xml || true
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml

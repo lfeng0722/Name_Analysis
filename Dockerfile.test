@@ -1,0 +1,16 @@
+# Dockerfile.test
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# layer cache for deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# test-only deps
+RUN pip install --no-cache-dir pytest coverage
+
+COPY . .
+
+# default command can be overridden by 'docker run ... pytest ...'
+CMD ["pytest", "-q"]

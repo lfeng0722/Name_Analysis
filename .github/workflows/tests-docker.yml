@@ -1,0 +1,68 @@
+name: CI - Dockerized tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build test image
+        run: |
+          docker build -f Dockerfile.test -t normaliser-tests:latest .
+
+      - name: Run unit tests (in container)
+        run: |
+          docker run --rm normaliser-tests:latest pytest -m unit -q
+
+      - name: Run integration tests (in container)
+        run: |
+          docker run --rm normaliser-tests:latest pytest -m integration -q
+
+      - name: Build production image (sanity)
+        run: |
+          docker build -f Dockerfile -t normaliser:latest .
+
+      - name: Spin up container and black-box health check
+        run: |
+          set -euo pipefail
+          docker run -d --name normaliser -p 8000:8000 normaliser:latest
+          # wait for app to boot
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8000/openapi.json >/dev/null; then
+              echo "Service is up"
+              break
+            fi
+            sleep 1
+          done
+          # basic docs check
+          curl -fsS http://localhost:8000/openapi.json | head -c 200 >/dev/null
+
+          # black-box POST /normalise
+          resp1="$(curl -fsS -X POST http://localhost:8000/normalise \
+            -H 'Content-Type: application/json' \
+            -d '{"messy_title":"BILLY THE EXTERMINATOR-DAY (R)"}')"
+          echo "normalise resp: $resp1"
+          echo "$resp1" | grep -F '"clean_title":"BILLY THE EXTERMINATOR"' > /dev/null
+
+          # black-box POST /normalise-batch
+          resp2="$(curl -fsS -X POST http://localhost:8000/normalise-batch \
+            -H 'Content-Type: application/json' \
+            -d '{"messy_titles":["GOTHAM -RPT","HOT SEAT -5PM","MIXOLOGY-EARLY(R)"]}')"
+          echo "normalise-batch resp: $resp2"
+          echo "$resp2" | grep -F '"clean_titles":["GOTHAM","HOT SEAT","MIXOLOGY"]' > /dev/null
+
+          docker logs normaliser --tail=100 || true
+          docker rm -f normaliser
