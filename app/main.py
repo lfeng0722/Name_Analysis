@@ -1,15 +1,6 @@
-"""
-main.py
---------
-Main FastAPI application entry point.
-
-Includes:
-- /healthz for health checks
-- /normalise and /normalise-batch endpoints
-- /metrics for Prometheus monitoring
-"""
-
-from fastapi import FastAPI, Request
+from typing import List
+from fastapi import FastAPI
+from pydantic import BaseModel
 from app.model import normalise_title
 from app.metrics import metrics_middleware, metrics_endpoint, BATCH_SIZE
 
@@ -18,53 +9,44 @@ app = FastAPI(title="TV Title Normalisation Service", version="1.0")
 # Attach metrics middleware
 app.middleware("http")(metrics_middleware)
 
-# ------------------------
-# Health check
-# ------------------------
+# ---------- Schemas (Pydantic) ----------
+
+class SingleTitleRequest(BaseModel):
+    messy_title: str
+
+class BatchTitleRequest(BaseModel):
+    messy_titles: List[str]
+
+# ---------- Health & Metrics ----------
 
 @app.get("/healthz")
 def healthz():
-    """
-    Lightweight endpoint for container/K8s health probes.
-    """
     return {"status": "ok"}
 
-# ------------------------
-# Normalisation endpoints
-# ------------------------
+@app.get("/metrics")
+def get_metrics():
+    return metrics_endpoint()
+
+# ---------- API Endpoints ----------
 
 @app.post("/normalise")
-def normalise_single(request: dict):
+def normalise_single(payload: SingleTitleRequest):
     """
     Single-title normalisation.
     Input: {"messy_title": "..."}
     Output: {"clean_title": "..."}
     """
-    messy_title = request.get("messy_title")
-    clean = normalise_title(messy_title)
+    clean = normalise_title(payload.messy_title)
     return {"clean_title": clean}
 
-
 @app.post("/normalise-batch")
-def normalise_batch(request: dict):
+def normalise_batch(payload: BatchTitleRequest):
     """
     Batch-title normalisation.
     Input: {"messy_titles": ["...", "..."]}
     Output: {"clean_titles": ["...", "..."]}
-    Also records batch size metric.
     """
-    messy_titles = request.get("messy_titles", [])
-    BATCH_SIZE.observe(len(messy_titles))
-    clean_titles = [normalise_title(t) for t in messy_titles]
+    titles = payload.messy_titles or []
+    BATCH_SIZE.observe(len(titles))
+    clean_titles = [normalise_title(t) for t in titles]
     return {"clean_titles": clean_titles}
-
-# ------------------------
-# Metrics endpoint
-# ------------------------
-
-@app.get("/metrics")
-def get_metrics():
-    """
-    Expose application and Python runtime metrics for Prometheus.
-    """
-    return metrics_endpoint()

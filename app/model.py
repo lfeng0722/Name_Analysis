@@ -14,12 +14,17 @@ RULES = [
     re.compile(r" \d+ (SESSION|PART|EP|TX|FEED)\d*$"),
     re.compile(r" \d+$"),
     re.compile(r"^M- ")
-    #NEW FUNCTION
 ]
-
 
 def normalise_title(messy_title: str) -> str:
     """Recursively apply regex rules to clean a TV title."""
+
+    # Defensive: tolerate None / non-str inputs
+    if messy_title is None:
+        return ""
+    if not isinstance(messy_title, str):
+        messy_title = str(messy_title)
+
     clean_title = messy_title
     original_title = clean_title
 
@@ -28,6 +33,7 @@ def normalise_title(messy_title: str) -> str:
 
     clean_title = clean_title.strip()
 
+    # Recurse if changed and still non-empty
     if clean_title != original_title and clean_title:
         return normalise_title(clean_title)
 
