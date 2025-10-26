@@ -14,6 +14,7 @@ RULES = [
     re.compile(r" \d+ (SESSION|PART|EP|TX|FEED)\d*$"),
     re.compile(r" \d+$"),
     re.compile(r"^M- ")
+    #NEW FUNCTION
 ]
 
 
