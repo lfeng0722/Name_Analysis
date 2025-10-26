@@ -11,8 +11,9 @@ This project provides a simple API that takes “messy” broadcast titles (ofte
 It is designed as a **containerised microservice** with:
 - ✅ REST API built with **FastAPI**
 - ✅ Automated **unit and integration tests** (via `pytest`)
-- ✅ Continuous Integration (CI) using **GitHub Actions**
+- ✅ Continuous Integration (CI) and Delivery (CD) via **GitHub Actions** (push to **GHCR**)
 - ✅ Dockerised for reproducible deployment and testing
+- ✅ Built-in **Prometheus** metrics at `/metrics`
 
 ---
 
@@ -40,7 +41,8 @@ ml_title_normaliser/
 └── .github/
     └── workflows/
         ├── tests.yml        # Runner-based CI
-        └── tests-docker.yml # Dockerised CI
+        ├── tests-docker.yml # Dockerised CI
+        └── cd.yml           # Build & publish image to GHCR
 ```
 
 ---
@@ -73,6 +75,18 @@ Clean multiple titles in one request.
 **Response:**
 ```json
 {"clean_titles": ["GOTHAM", "HOT SEAT", "MIXOLOGY"]}
+```
+
+---
+
+### `GET /metrics`
+Prometheus exposition format for monitoring. Includes default Python/Process metrics and app-specific HTTP metrics:
+- `http_requests_total{method, path, status}`
+- `http_request_duration_seconds_{bucket,sum,count}{method, path, status}`
+
+Quick check:
+```bash
+curl -s http://localhost:8000/metrics | grep -E 'http_requests_total|http_request_duration_seconds'
 ```
 
 ---
@@ -144,6 +158,9 @@ docker run -p 8000:8000 title-normaliser
 Access the interactive docs:  
 👉 [http://localhost:8000/docs](http://localhost:8000/docs)
 
+Check metrics quickly:  
+👉 `http://localhost:8000/metrics`
+
 ### Build and run tests inside Docker
 ```bash
 docker build -f Dockerfile.test -t normaliser-tests .
@@ -177,6 +194,24 @@ Both workflows trigger automatically on:
 
 ---
 
+## 🚢 Continuous Delivery (CD) to GHCR
+
+`cd.yml` builds and publishes the production image to **GitHub Container Registry (GHCR)**:
+- Triggers on push to `main` and tags matching `v*` (e.g., `v1.0.0`).
+- Image reference: `ghcr.io/<owner>/<repo>:<tag>`
+
+Pull and run:
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+docker run -p 8000:8000 ghcr.io/<owner>/<repo>:latest
+```
+
+Notes:
+- For private packages, login with a PAT that has `read:packages`.
+- Use semantic tags (`vX.Y.Z`) for immutable releases, or pin by digest.
+
+---
+
 ## 🔍 CI Verification Steps
 
 1. Push your branch to GitHub:
@@ -196,26 +231,28 @@ Both workflows trigger automatically on:
 
 ---
 
+## 📈 Observability & Monitoring
+
+### Prometheus scrape example
+```yaml
+scrape_configs:
+  - job_name: normaliser
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:8000']
+```
+
+### Common Grafana panels (PromQL)
+- QPS: `sum by (path,status) (rate(http_requests_total[1m]))`
+- P95: `histogram_quantile(0.95, sum by (le,path) (rate(http_request_duration_seconds_bucket[5m])))`
+
+---
+
 ## 📈 Future Improvements
 - Add versioned model rules (e.g. via config file or S3)
 - Add request/response logging (e.g. `loguru`)
-- Integrate metrics (latency, error rate)
+- Error rate metrics and tracing
 - Optional async batch processing
 - Deploy to AWS ECS or GCP Cloud Run
 
----
 
-## 🧑‍💻 Author
-
-**TV Title Normalisation Service**  
-Developed as part of the *Machine Learning Engineer Technical Task*.  
-Includes full API, testing, and CI/CD implementation for production readiness.
-
----
-
-✅ **Status: All required tasks completed**
-- [x] API endpoints implemented  
-- [x] Dockerised  
-- [x] Unit & integration tests (with edge cases)  
-- [x] GitHub Actions CI/CD added  
-- [x] README & documentation complete
