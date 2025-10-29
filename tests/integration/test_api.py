@@ -21,15 +21,20 @@ def test_docs_available(client: TestClient):
 
 
 @pytest.mark.integration
-def test_metrics_endpoint_exposes_prometheus_text(client: TestClient):
-    """The /metrics endpoint should expose Prometheus text format and include default process metrics."""
+def test_metrics_endpoint_exposes_requests_metrics_only(client: TestClient):
+    """/metrics should expose only request metrics (count + latency) in Prometheus text format."""
+    # Ensure at least one request so histograms/counters have samples
+    _ = client.post("/normalise", json={"messy_title": "A -RPT"})
     r = client.get("/metrics")
     assert r.status_code == 200
     assert r.headers.get("content-type", "").startswith("text/plain")
     body = r.text
-    # A couple of common default metrics names from prometheus_client
-    assert "python_info" in body
-    assert "process_cpu_seconds_total" in body or "process_virtual_memory_bytes" in body
+    # Custom metrics present
+    assert "http_requests_total" in body
+    assert "http_request_duration_seconds" in body
+    # Default process/python metrics should not be present
+    assert "python_info" not in body
+    assert "process_cpu_seconds_total" not in body
 
 
 @pytest.mark.integration

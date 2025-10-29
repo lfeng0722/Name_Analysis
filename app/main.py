@@ -2,16 +2,25 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel
 from typing import List
 from app.model import normalise_title
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import (
+    Counter,
+    Histogram,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+)
 import time
 
 app = FastAPI(title="TV Title Normalisation Service", version="1.0")
 
-# Prometheus metrics
+# Prometheus metrics (custom registry: expose only request count/latency)
+PROM_REGISTRY = CollectorRegistry()
+
 REQUEST_COUNTER = Counter(
     "http_requests_total",
     "Total HTTP requests",
     ["method", "path", "status"],
+    registry=PROM_REGISTRY,
 )
 
 REQUEST_LATENCY = Histogram(
@@ -19,6 +28,7 @@ REQUEST_LATENCY = Histogram(
     "HTTP request latency in seconds",
     ["method", "path", "status"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+    registry=PROM_REGISTRY,
 )
 
 
@@ -67,5 +77,5 @@ def normalise_batch(request: BatchTitleRequest):
 
 @app.get("/metrics")
 def metrics() -> Response:
-    data = generate_latest()
+    data = generate_latest(PROM_REGISTRY)
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
